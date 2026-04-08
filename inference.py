@@ -34,7 +34,7 @@ def clean_json_output(raw_output):
 
 def run_task(task_id):
     # --- MANDATORY [START] LOG ---
-    print(json.dumps({"event": "[START]", "task": task_id}, separate_lines=False))
+    print(json.dumps({"event": "[START]", "task": task_id}))
 
     # Reset Environment with specific task_id
     try:
