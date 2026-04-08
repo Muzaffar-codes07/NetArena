@@ -35,7 +35,7 @@ def step(action: Action, task_id: str = Query(..., description="Task ID")):
     observation, done = env.step(task_id, action.command)
     reward = grade_task(task_id, env.tasks[task_id])
 
-    return StepResponse(observation=observation, reward=reward, done=done)
+    return StepResponse(observation=observation, reward=reward, done=done).model_dump()
 
 
 @app.get("/state")

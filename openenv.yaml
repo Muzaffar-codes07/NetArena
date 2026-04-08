@@ -1,7 +1,7 @@
 name: NetArena
 description: "SRE Incident Response Simulator — AI agent diagnoses and fixes production outages in a simulated Linux terminal"
 version: "1.0"
-reward_range: [0.0, 1.3]
+reward_range: [0.0, 1.0]
 
 observation_space:
   stdout:
@@ -33,16 +33,16 @@ tasks:
     difficulty: easy
     description: "Nginx web server is down. Restore the service."
     max_steps: 15
-    reward_range: [0.0, 1.3]
+    reward_range: [0.0, 1.0]
   - id: task2
     name: Port Conflict
     difficulty: medium
     description: "Port 8080 is blocked by a zombie process. Kill it and free the port."
     max_steps: 15
-    reward_range: [0.0, 1.3]
+    reward_range: [0.0, 1.0]
   - id: task3
     name: Disk Full and DB Crash
     difficulty: hard
     description: "Disk is 100% full and PostgreSQL has crashed. Free space and restore the database."
     max_steps: 15
-    reward_range: [0.0, 1.3]
+    reward_range: [0.0, 1.0]

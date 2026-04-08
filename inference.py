@@ -20,17 +20,18 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # 1. AUTH & CONFIG
-API_BASE_URL = os.environ.get('API_BASE_URL', 'http://localhost:7860').rstrip('/')
+API_BASE_URL = os.environ.get('API_BASE_URL', 'https://router.huggingface.co/v1').rstrip('/')
 MODEL_NAME = os.environ.get('MODEL_NAME', 'meta-llama/Meta-Llama-3-8B-Instruct')
 HF_TOKEN = os.environ.get('HF_TOKEN')
+ENV_URL = "http://localhost:7860"  # FastAPI environment server (runs in same container)
 
 if not HF_TOKEN:
     logger.critical("Missing HF_TOKEN environment variable.")
     sys.exit(1)
 
-# Initialize OpenAI client
+# Initialize OpenAI client — uses API_BASE_URL as the LLM endpoint per competition spec
 client = OpenAI(
-    base_url="https://router.huggingface.co/v1", 
+    base_url=API_BASE_URL,
     api_key=HF_TOKEN
 )
 
@@ -48,7 +49,7 @@ def verify_service_health(task_id):
     cmd = check_commands.get(task_id, "ls")
     try:
         resp = requests.post(
-            f"{API_BASE_URL}/step",
+            f"{ENV_URL}/step",
             json={"command": cmd, "explanation": "Validation step: Verifying service health."},
             params={"task_id": task_id},
             timeout=10
@@ -88,7 +89,7 @@ def run_task(task_id):
     print(f"[START] task={task_id} env=netarena model={MODEL_NAME}")
 
     try:
-        resp = requests.post(f"{API_BASE_URL}/reset", params={"task_id": task_id}, timeout=15)
+        resp = requests.post(f"{ENV_URL}/reset", params={"task_id": task_id}, timeout=15)
         obs = resp.json()
     except Exception as e:
         logger.error(f"Failed to reset environment for {task_id}: {e}")
@@ -131,7 +132,7 @@ def run_task(task_id):
 
             # Execution Step
             step_result = requests.post(
-                f"{API_BASE_URL}/step",
+                f"{ENV_URL}/step",
                 json=action,
                 params={"task_id": task_id},
                 timeout=15
@@ -205,7 +206,7 @@ def run_task(task_id):
 
 if __name__ == "__main__":
     try: 
-        requests.get(f"{API_BASE_URL}/health", timeout=5)
+        requests.get(f"{ENV_URL}/health", timeout=5)
     except: 
         pass
     
