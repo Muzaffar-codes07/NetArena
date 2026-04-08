@@ -20,7 +20,7 @@ def health():
 
 
 @app.post("/reset")
-def reset(task_id: str = Query(..., description="Task ID (task1, task2, task3)")):
+def reset(task_id: str = Query("task1", description="Task ID (task1, task2, task3)")):
     _validate_task_id(task_id)
     alert = env.reset(task_id)
     return ResetResponse(stdout=alert)
