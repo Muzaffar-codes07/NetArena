@@ -1,6 +1,5 @@
 fastapi==0.111.0
 uvicorn==0.29.0
-pydantic==2.12.5
+pydantic==2.9.2
 openai==1.30.0
 requests==2.32.0
-huggingface_hub[mcp]==1.9.1

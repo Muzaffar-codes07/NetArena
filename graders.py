@@ -46,8 +46,8 @@ def _grade_task3(state: SystemState) -> Reward:
         state.completion_rewarded = True
         return Reward(value=1.0, reason="Disk space freed and PostgreSQL database restored.")
 
-    if (disk_ok or db_ok) and not state.completion_rewarded:
-        # Partial credit — only given once via completion_rewarded
+    if (disk_ok or db_ok) and not state.completion_rewarded and not state.partial_rewarded:
+        state.partial_rewarded = True
         if disk_ok and not db_ok:
             return Reward(value=0.3, reason="Disk space freed but database still down.")
         if db_ok and not disk_ok:

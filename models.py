@@ -9,6 +9,9 @@ class Action(BaseModel):
 class Observation(BaseModel):
     stdout: str = ""
     stderr: str = ""
+    exit_code: int = 0
+    step_number: int = 0
+    done: bool = False
 
 
 class Reward(BaseModel):
@@ -48,3 +51,4 @@ class SystemState(BaseModel):
     diagnostic_commands_run: list[str] = Field(default_factory=list)
     completion_rewarded: bool = False
     diagnostic_rewarded: bool = False
+    partial_rewarded: bool = False

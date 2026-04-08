@@ -55,3 +55,13 @@ docker run -p 7860:7860 netarena
 | `/reset?task_id=task1` | POST | Reset environment for a task |
 | `/step?task_id=task1` | POST | Execute a command (JSON body: `{"command": "...", "explanation": "..."}`) |
 | `/state?task_id=task1` | GET | Get current task state |
+
+## Baseline Scores
+
+<!-- Fill in these scores from the final inference.py run before submission -->
+
+| Task | Score | Steps |
+|------|-------|-------|
+| task1 | TBD | TBD |
+| task2 | TBD | TBD |
+| task3 | TBD | TBD |

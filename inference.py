@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import requests
 import re
@@ -6,16 +7,24 @@ from openai import OpenAI
 from prompts import SYSTEM_PROMPT
 
 # 1. AUTH & CONFIG (Standard OpenEnv Env Vars)
-API_BASE_URL = os.environ.get('API_BASE_URL').rstrip('/') 
+API_BASE_URL = os.environ.get('API_BASE_URL')
 MODEL_NAME = os.environ.get('MODEL_NAME')
 HF_TOKEN = os.environ.get('HF_TOKEN')
+
+# Defensive check: bail early if env vars are missing
+_missing = [name for name, val in [("API_BASE_URL", API_BASE_URL), ("MODEL_NAME", MODEL_NAME), ("HF_TOKEN", HF_TOKEN)] if not val]
+if _missing:
+    print(f"ERROR: Missing required environment variables: {', '.join(_missing)}")
+    sys.exit(1)
+
+API_BASE_URL = API_BASE_URL.rstrip('/')
 
 # Initialize OpenAI-compatible client pointing to your HF Space
 client = OpenAI(base_url=f"{API_BASE_URL}/v1", api_key=HF_TOKEN)
 
 def clean_json_output(raw_output):
     """
-    BEAT THE OTHER AIs: This function handles cases where the model 
+    BEAT THE OTHER AIs: This function handles cases where the model
     wraps JSON in markdown code blocks or adds conversational filler.
     """
     try:
@@ -50,29 +59,38 @@ def run_task(task_id):
     ]
 
     total_reward = 0.0
-    
+    step = 0
+
     # OpenEnv Standard: Max 15 steps
     for step in range(1, 16):
         try:
-            # Call LLM with JSON mode enabled
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0.2 # Lower temperature for more stable JSON
-            )
-            
+            # Call LLM with JSON mode enabled, with fallback for providers that don't support it
+            try:
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    temperature=0.2
+                )
+            except Exception:
+                # Retry without response_format if the provider doesn't support JSON mode
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=messages,
+                    temperature=0.2
+                )
+
             raw_content = response.choices[0].message.content
             action = clean_json_output(raw_content)
 
             # Step the Environment
             step_result = requests.post(
-                f"{API_BASE_URL}/step", 
-                json=action, 
+                f"{API_BASE_URL}/step",
+                json=action,
                 params={"task_id": task_id},
                 timeout=10
             ).json()
-            
+
             observation = step_result['observation']
             reward = step_result['reward']
             done = step_result['done']
@@ -87,6 +105,7 @@ def run_task(task_id):
                 "explanation": action.get("explanation", "none"),
                 "stdout": observation.get('stdout', ''),
                 "stderr": observation.get('stderr', ''),
+                "exit_code": observation.get('exit_code', 0),
                 "reward": reward.get('value', 0.0),
                 "reason": reward.get('reason', 'no reason provided')
             }))

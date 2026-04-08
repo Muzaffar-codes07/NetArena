@@ -20,12 +20,15 @@ class SREEnvironment:
         state.step_count += 1
 
         if state.done:
-            return Observation(stdout="Task already completed."), True
+            return Observation(stdout="Task already completed.", exit_code=0), True
 
         obs = self._dispatch(state, command)
 
         if state.step_count >= state.max_steps:
             state.done = True
+
+        obs.step_number = state.step_count
+        obs.done = state.done
 
         return obs, state.done
 
@@ -71,30 +74,30 @@ class SREEnvironment:
                     "      Tasks: 2 (limit: 4915)\n"
                     "     Memory: 5.2M\n"
                     "     CGroup: /system.slice/nginx.service"
-                ))
+                ), exit_code=0)
             return Observation(stdout=(
                 "● nginx.service - A high performance web server\n"
                 "     Loaded: loaded (/lib/systemd/system/nginx.service; enabled)\n"
                 "     Active: inactive (dead) since Tue 2026-04-08 08:15:33 UTC\n"
                 "   Main PID: 1234 (code=exited, status=1/FAILURE)\n"
                 "\nApr 08 08:15:33 prod-web-01 systemd[1]: nginx.service: Failed with result 'exit-code'."
-            ))
+            ), exit_code=0)
 
         # systemctl start/restart nginx
         if "systemctl" in cmd and ("start" in cmd or "restart" in cmd) and "nginx" in cmd:
             state.nginx_status = "running"
             state.done = True
-            return Observation(stdout="● nginx.service - Starting A high performance web server...\n● nginx.service - Started A high performance web server.")
+            return Observation(stdout="● nginx.service - Starting A high performance web server...\n● nginx.service - Started A high performance web server.", exit_code=0)
 
         # nginx -t (config test)
         if cmd.startswith("nginx") and "-t" in cmd:
-            return Observation(stdout="nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\nnginx: configuration file /etc/nginx/nginx.conf test is successful")
+            return Observation(stdout="nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\nnginx: configuration file /etc/nginx/nginx.conf test is successful", exit_code=0)
 
         # curl localhost
         if "curl" in cmd and ("localhost" in cmd or "127.0.0.1" in cmd):
             if state.nginx_status == "running":
-                return Observation(stdout="<html>\n<head><title>Welcome to nginx!</title></head>\n<body>\n<h1>Welcome to nginx!</h1>\n</body>\n</html>")
-            return Observation(stdout="", stderr="curl: (7) Failed to connect to localhost port 80: Connection refused")
+                return Observation(stdout="<html>\n<head><title>Welcome to nginx!</title></head>\n<body>\n<h1>Welcome to nginx!</h1>\n</body>\n</html>", exit_code=0)
+            return Observation(stdout="", stderr="curl: (7) Failed to connect to localhost port 80: Connection refused", exit_code=1)
 
         # cat nginx conf
         if "cat" in cmd and "nginx" in cmd:
@@ -108,7 +111,7 @@ class SREEnvironment:
                 "    default_type application/octet-stream;\n\n"
                 "    server {\n        listen 80 default_server;\n"
                 "        root /var/www/html;\n        index index.html;\n    }\n}"
-            ))
+            ), exit_code=0)
 
         return None
 
@@ -125,13 +128,13 @@ class SREEnvironment:
                     "tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      512/sshd\n"
                     "tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN      6789/zombie_proc\n"
                     "tcp        0      0 0.0.0.0:443             0.0.0.0:*               LISTEN      890/nginx"
-                ))
+                ), exit_code=0)
             return Observation(stdout=(
                 "Active Internet connections (only servers)\n"
                 "Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name\n"
                 "tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      512/sshd\n"
                 "tcp        0      0 0.0.0.0:443             0.0.0.0:*               LISTEN      890/nginx"
-            ))
+            ), exit_code=0)
 
         # lsof -i :8080
         if "lsof" in cmd and "8080" in cmd:
@@ -139,8 +142,8 @@ class SREEnvironment:
                 return Observation(stdout=(
                     "COMMAND       PID   USER   FD   TYPE DEVICE SIZE/OFF NODE NAME\n"
                     "zombie_pr  6789   root    3u  IPv4  12345      0t0  TCP *:8080 (LISTEN)"
-                ))
-            return Observation(stdout="")
+                ), exit_code=0)
+            return Observation(stdout="", exit_code=0)
 
         # ps aux / ps -ef
         if cmd.startswith("ps"):
@@ -152,21 +155,21 @@ class SREEnvironment:
                     "root      6789  0.0  0.0      0     0 ?        Z    08:05   0:00 [zombie_proc] <defunct>\n"
                     "www-data   890  0.0  0.2 141112  9640 ?        Ss   08:00   0:01 nginx: master process\n"
                     "root      1001  0.0  0.0  21564  4356 pts/0    Ss   09:00   0:00 -bash"
-                ))
+                ), exit_code=0)
             return Observation(stdout=(
                 "USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n"
                 "root         1  0.0  0.1 169332 11204 ?        Ss   08:00   0:02 /sbin/init\n"
                 "root       512  0.0  0.0  72304  5576 ?        Ss   08:00   0:00 /usr/sbin/sshd\n"
                 "www-data   890  0.0  0.2 141112  9640 ?        Ss   08:00   0:01 nginx: master process\n"
                 "root      1001  0.0  0.0  21564  4356 pts/0    Ss   09:00   0:00 -bash"
-            ))
+            ), exit_code=0)
 
         # kill -9 6789  (the correct PID)
         if "kill" in cmd and "6789" in cmd:
             state.zombie_pid_alive = False
             state.port_8080_free = True
             state.done = True
-            return Observation(stdout="")
+            return Observation(stdout="", exit_code=0)
 
         # kill with wrong PID
         if "kill" in cmd:
@@ -174,13 +177,13 @@ class SREEnvironment:
             parts = cmd.split()
             for p in parts:
                 if p.isdigit() and p != "9":
-                    return Observation(stdout="", stderr=f"bash: kill: ({p}) - No such process")
-            return Observation(stdout="", stderr="kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]")
+                    return Observation(stdout="", stderr=f"bash: kill: ({p}) - No such process", exit_code=1)
+            return Observation(stdout="", stderr="kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]", exit_code=1)
 
         # systemctl status for any service — show them everything is fine
         if "systemctl" in cmd and "status" in cmd:
             service = cmd.split()[-1] if len(cmd.split()) > 2 else "unknown"
-            return Observation(stdout=f"● {service}.service\n     Active: active (running)")
+            return Observation(stdout=f"● {service}.service\n     Active: active (running)", exit_code=0)
 
         return None
 
@@ -196,13 +199,13 @@ class SREEnvironment:
                     "/dev/sda1        50G   50G     0 100% /\n"
                     "tmpfs           2.0G     0  2.0G   0% /dev/shm\n"
                     "/dev/sda2       200G   45G  155G  23% /data"
-                ))
+                ), exit_code=0)
             return Observation(stdout=(
                 "Filesystem      Size  Used Avail Use% Mounted on\n"
                 "/dev/sda1        50G   23G   27G  45% /\n"
                 "tmpfs           2.0G     0  2.0G   0% /dev/shm\n"
                 "/dev/sda2       200G   45G  155G  23% /data"
-            ))
+            ), exit_code=0)
 
         # du -sh /var/log
         if "du" in cmd and "/var/log" in cmd:
@@ -213,19 +216,19 @@ class SREEnvironment:
                     "12K\t/var/log/auth.log\n"
                     "8.0K\t/var/log/kern.log\n"
                     "4.0K\t/var/log/dpkg.log"
-                ))
+                ), exit_code=0)
             return Observation(stdout=(
                 "24K\t/var/log/syslog\n"
                 "12K\t/var/log/auth.log\n"
                 "8.0K\t/var/log/kern.log\n"
                 "4.0K\t/var/log/dpkg.log"
-            ))
+            ), exit_code=0)
 
         # find large files
         if "find" in cmd and ("size" in cmd or "1G" in cmd):
             if state.large_log_exists:
-                return Observation(stdout="/var/log/app.log")
-            return Observation(stdout="")
+                return Observation(stdout="/var/log/app.log", exit_code=0)
+            return Observation(stdout="", exit_code=0)
 
         # ls /var/log
         if "ls" in cmd and "/var/log" in cmd:
@@ -236,13 +239,13 @@ class SREEnvironment:
                     "-rw-r--r-- 1 root root  24K Apr  8 09:00 syslog\n"
                     "-rw-r--r-- 1 root root  12K Apr  8 09:00 auth.log\n"
                     "-rw-r--r-- 1 root root 8.0K Apr  8 08:30 kern.log"
-                ))
+                ), exit_code=0)
             return Observation(stdout=(
                 "total 48K\n"
                 "-rw-r--r-- 1 root root  24K Apr  8 09:00 syslog\n"
                 "-rw-r--r-- 1 root root  12K Apr  8 09:00 auth.log\n"
                 "-rw-r--r-- 1 root root 8.0K Apr  8 08:30 kern.log"
-            ))
+            ), exit_code=0)
 
         # rm or truncate the log file
         if ("rm" in cmd or "truncate" in cmd) and "app.log" in cmd:
@@ -252,8 +255,8 @@ class SREEnvironment:
                 # Check if task is fully done
                 if state.db_status == "running":
                     state.done = True
-                return Observation(stdout="")
-            return Observation(stdout="", stderr="rm: cannot remove '/var/log/app.log': No such file or directory")
+                return Observation(stdout="", exit_code=0)
+            return Observation(stdout="", stderr="rm: cannot remove '/var/log/app.log': No such file or directory", exit_code=1)
 
         # cat /var/log/app.log
         if "cat" in cmd and "app.log" in cmd:
@@ -263,20 +266,21 @@ class SREEnvironment:
                     "[2026-04-08 00:00:01] ERROR: Connection pool exhausted\n"
                     "[2026-04-08 00:00:02] ERROR: Connection pool exhausted\n"
                     "... (repeating, file is 15GB) ..."
-                ))
-            return Observation(stdout="", stderr="cat: /var/log/app.log: No such file or directory")
+                ), exit_code=0)
+            return Observation(stdout="", stderr="cat: /var/log/app.log: No such file or directory", exit_code=1)
 
         # systemctl start/restart postgresql
         if "systemctl" in cmd and ("start" in cmd or "restart" in cmd) and ("postgresql" in cmd or "postgres" in cmd):
             if state.disk_usage_percent >= 90:
                 return Observation(
                     stdout="",
-                    stderr="Job for postgresql.service failed because the control process exited with error code.\nSee \"systemctl status postgresql.service\" and \"journalctl -xe\" for details.\nHint: Disk is full — free space before starting the database."
+                    stderr="Job for postgresql.service failed because the control process exited with error code.\nSee \"systemctl status postgresql.service\" and \"journalctl -xe\" for details.\nHint: Disk is full — free space before starting the database.",
+                    exit_code=1
                 )
             state.db_status = "running"
             if not state.large_log_exists:
                 state.done = True
-            return Observation(stdout="● postgresql.service - PostgreSQL RDBMS\n     Active: active (running) since Tue 2026-04-08 10:30:00 UTC\n   Main PID: 2345 (postgres)")
+            return Observation(stdout="● postgresql.service - PostgreSQL RDBMS\n     Active: active (running) since Tue 2026-04-08 10:30:00 UTC\n   Main PID: 2345 (postgres)", exit_code=0)
 
         # systemctl status postgresql
         if "systemctl" in cmd and "status" in cmd and ("postgresql" in cmd or "postgres" in cmd):
@@ -286,14 +290,14 @@ class SREEnvironment:
                     "     Loaded: loaded (/lib/systemd/system/postgresql.service; enabled)\n"
                     "     Active: active (running) since Tue 2026-04-08 10:30:00 UTC\n"
                     "   Main PID: 2345 (postgres)"
-                ))
+                ), exit_code=0)
             return Observation(stdout=(
                 "● postgresql.service - PostgreSQL RDBMS\n"
                 "     Loaded: loaded (/lib/systemd/system/postgresql.service; enabled)\n"
                 "     Active: failed (Result: exit-code) since Tue 2026-04-08 08:00:00 UTC\n"
                 "   Main PID: 2345 (code=exited, status=1/FAILURE)\n"
                 "\nApr 08 08:00:00 prod-db-01 postgresql[2345]: FATAL: could not write lock file: No space left on device"
-            ))
+            ), exit_code=0)
 
         # journalctl for postgresql
         if "journalctl" in cmd and ("postgresql" in cmd or "postgres" in cmd):
@@ -301,7 +305,7 @@ class SREEnvironment:
                 "-- Logs begin at Tue 2026-04-08 00:00:00 UTC --\n"
                 "Apr 08 08:00:00 prod-db-01 postgresql[2345]: FATAL: could not write lock file: No space left on device\n"
                 "Apr 08 08:00:00 prod-db-01 systemd[1]: postgresql.service: Main process exited, code=exited, status=1/FAILURE"
-            ))
+            ), exit_code=0)
 
         return None
 
@@ -312,36 +316,36 @@ class SREEnvironment:
         # echo
         if cmd.startswith("echo"):
             text = cmd[5:].strip().strip('"').strip("'")
-            return Observation(stdout=text)
+            return Observation(stdout=text, exit_code=0)
 
         # whoami
         if cmd == "whoami":
-            return Observation(stdout="root")
+            return Observation(stdout="root", exit_code=0)
 
         # hostname
         if cmd == "hostname":
             hosts = {"task1": "prod-web-01", "task2": "prod-app-01", "task3": "prod-db-01"}
-            return Observation(stdout=hosts.get(state.task_id, "prod-server"))
+            return Observation(stdout=hosts.get(state.task_id, "prod-server"), exit_code=0)
 
         # uname
         if cmd.startswith("uname"):
-            return Observation(stdout="Linux prod-server 5.15.0-91-generic #101-Ubuntu SMP x86_64 GNU/Linux")
+            return Observation(stdout="Linux prod-server 5.15.0-91-generic #101-Ubuntu SMP x86_64 GNU/Linux", exit_code=0)
 
         # uptime
         if cmd == "uptime":
-            return Observation(stdout=" 10:30:00 up 45 days,  3:22,  1 user,  load average: 2.15, 1.89, 1.45")
+            return Observation(stdout=" 10:30:00 up 45 days,  3:22,  1 user,  load average: 2.15, 1.89, 1.45", exit_code=0)
 
         # ls (generic)
         if cmd.startswith("ls"):
-            return Observation(stdout="bin  boot  dev  etc  home  lib  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var")
+            return Observation(stdout="bin  boot  dev  etc  home  lib  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var", exit_code=0)
 
         # pwd
         if cmd == "pwd":
-            return Observation(stdout="/root")
+            return Observation(stdout="/root", exit_code=0)
 
         # id
         if cmd == "id":
-            return Observation(stdout="uid=0(root) gid=0(root) groups=0(root)")
+            return Observation(stdout="uid=0(root) gid=0(root) groups=0(root)", exit_code=0)
 
         # free -h
         if cmd.startswith("free"):
@@ -349,7 +353,7 @@ class SREEnvironment:
                 "              total        used        free      shared  buff/cache   available\n"
                 "Mem:          7.8Gi       3.2Gi       1.1Gi       256Mi       3.5Gi       4.0Gi\n"
                 "Swap:         2.0Gi       128Mi       1.9Gi"
-            ))
+            ), exit_code=0)
 
         # top (just header)
         if cmd.startswith("top"):
@@ -357,12 +361,12 @@ class SREEnvironment:
                 "top - 10:30:00 up 45 days,  3:22,  1 user,  load average: 2.15, 1.89, 1.45\n"
                 "Tasks: 112 total,   1 running, 110 sleeping,   0 stopped,   1 zombie\n"
                 "%Cpu(s):  5.2 us,  1.3 sy,  0.0 ni, 93.1 id,  0.3 wa,  0.0 hi,  0.1 si"
-            ))
+            ), exit_code=0)
 
         # date
         if cmd == "date":
-            return Observation(stdout="Tue Apr  8 10:30:00 UTC 2026")
+            return Observation(stdout="Tue Apr  8 10:30:00 UTC 2026", exit_code=0)
 
         # Unknown command
         base = cmd.split()[0] if cmd.split() else cmd
-        return Observation(stdout="", stderr=f"bash: {base}: command not found")
+        return Observation(stdout="", stderr=f"bash: {base}: command not found", exit_code=127)
