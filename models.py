@@ -2,8 +2,8 @@ from pydantic import BaseModel, Field
 
 
 class Action(BaseModel):
-    command: str
-    explanation: str = ""
+    command: str = Field(..., max_length=1000)
+    explanation: str = Field(default="", max_length=2000)
 
 
 class Observation(BaseModel):

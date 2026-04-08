@@ -1,10 +1,14 @@
 import os
 import sys
 import json
+import logging
 import requests
 import re
 from openai import OpenAI
 from prompts import SYSTEM_PROMPT
+
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 # 1. AUTH & CONFIG (Standard OpenEnv Env Vars)
 API_BASE_URL = os.environ.get('API_BASE_URL')
@@ -14,7 +18,7 @@ HF_TOKEN = os.environ.get('HF_TOKEN')
 # Defensive check: bail early if env vars are missing
 _missing = [name for name, val in [("API_BASE_URL", API_BASE_URL), ("MODEL_NAME", MODEL_NAME), ("HF_TOKEN", HF_TOKEN)] if not val]
 if _missing:
-    print(f"ERROR: Missing required environment variables: {', '.join(_missing)}")
+    logger.critical("Missing required environment variables. Check .env.example for the full list.")
     sys.exit(1)
 
 API_BASE_URL = API_BASE_URL.rstrip('/')
@@ -36,8 +40,8 @@ def clean_json_output(raw_output):
         if match:
             try:
                 return json.loads(match.group(0))
-            except:
-                pass
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning("Regex-extracted JSON failed to parse: %s", e)
     # Final fallback if the model completely fails to provide JSON
     return {"command": "ls", "explanation": "Fallback: Model output was not valid JSON."}
 
@@ -119,9 +123,8 @@ def run_task(task_id):
             feedback = observation['stdout'] if observation['stdout'] else f"Error: {observation['stderr']}"
             messages.append({"role": "user", "content": feedback})
 
-        except Exception as e:
-            # Critical step: don't let the loop crash, log the error and try to continue
-            print(json.dumps({"event": "[ERROR]", "task": task_id, "error": str(e)}))
+        except (requests.RequestException, KeyError, IndexError) as e:
+            print(json.dumps({"event": "[ERROR]", "task": task_id, "error": type(e).__name__}))
             break
 
     # --- MANDATORY [END] LOG ---
@@ -140,5 +143,5 @@ if __name__ == "__main__":
         if health.status_code == 200:
             for task in ["task1", "task2", "task3"]:
                 run_task(task)
-    except:
-        print("CRITICAL: Environment is not reachable. Check API_BASE_URL.")
+    except requests.RequestException:
+        logger.critical("Environment is not reachable. Check API_BASE_URL.")
